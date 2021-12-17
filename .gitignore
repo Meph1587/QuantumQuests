@@ -1,0 +1,6 @@
+/node_modules/
+/venv/
+.pytest_cache
+artifacts
+starknet-artifacts
+.DS_Store
