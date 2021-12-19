@@ -47,3 +47,17 @@ async def test_store_traits():
     r = await contract.has_traits_stored(777).call()
 
     assert r.result.res == 1
+
+    # Store trait affinities
+    await contract.store_trait_affinities_identity(trait=1, length=8, identity=[1,2,3,4,5,6,7,8]).invoke()
+
+    r = await contract.get_trait_affinities_identity(1).call()
+
+    assert r.result.list == [1,2,3,4,5,6,7,8]
+
+
+    await contract.store_trait_affinities_positive(trait=1, length=8, positive=[8,7,6,5,4,3,2,1]).invoke()
+
+    r = await contract.get_trait_affinities_positive(1).call()
+
+    assert r.result.list == [8,7,6,5,4,3,2,1]

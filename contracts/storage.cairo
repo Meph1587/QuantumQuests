@@ -1,21 +1,3 @@
-# [StarkNet](https://starkware.co/product/starknet/) is a permissionless decentralized ZK-Rollup operating
-# as an L2 network over Ethereum, where any dApp can achieve
-# unlimited scale for its computation, without compromising
-# Ethereum's composability and security.
-#
-# This is a simple StarkNet contract.
-# Note that you won't be able to use the playground to compile and run it,
-# but you can deploy it on the [StarkNet Planets Alpha network](https://medium.com/starkware/starknet-planets-alpha-on-ropsten-e7494929cb95)!
-#
-# 1. Click on "Deploy" to deploy the contract.
-#    For more information on how to write Cairo contracts see the
-#    ["Hello StarkNet" tutorial](https://cairo-lang.org/docs/hello_starknet).
-# 2. Click on the contract address in the output pane to open
-#    [Voyager](https://voyager.online/) - the StarkNet block explorer.
-# 3. Wait for the page to load the information
-#    (it may take a few minutes until a block is created).
-# 4. In the "STATE" tab, you can call the "add()" transaction.
-
 # The "%lang" directive declares this code as a StarkNet contract.
 %lang starknet
 
@@ -29,7 +11,7 @@ from starkware.cairo.common.alloc import alloc
 from starkware.cairo.common.registers import get_fp_and_pc
 from starkware.cairo.common.keccak import unsafe_keccak
 
-# Positions in Traits Storage Var
+# TraitId for storing in wizard_traits
 const BODY = 0
 const HEAD = 1
 const PROP = 2
@@ -37,13 +19,31 @@ const RUNE = 3
 const FAMILIAR = 4
 
 @storage_var
-func wizard_stored(wizard : felt) -> (res : felt):
-end
-
-@storage_var
 func wizard_traits(wizard : felt, traitId : felt) -> (res : felt):
 end
 
+@storage_var
+func wizard_stored(wizard : felt) -> (res : felt):
+end
+
+# affinities are stored as list by storing each affinity at a different Id for a trait
+@storage_var
+func traits_affinity_identity(trait : felt, affinityId : felt) -> (res : felt):
+end
+
+@storage_var
+func traits_affinity_identity_len(trait : felt) -> (res : felt):
+end
+
+@storage_var
+func traits_affinity_positive_len(trait : felt) -> (res : felt):
+end
+
+@storage_var
+func traits_affinity_positive(trait : felt, affinityId : felt) -> (res : felt):
+end
+
+# stores the traits for a wizard, all traits need to be supplied, use 7777 if trait is not there
 @external
 func store_wizard_traits{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         wizard : felt, body : felt, head : felt, prop : felt, rune : felt, familiar : felt):
@@ -58,6 +58,7 @@ func store_wizard_traits{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range
     return ()
 end
 
+# reads wizard traits, returns 7777 if trait is ot present on wizard
 @view
 func get_wizard_traits{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
         wizard : felt) -> (body : felt, head : felt, prop : felt, rune : felt, familiar : felt):
@@ -74,4 +75,93 @@ func has_traits_stored{syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_c
         wizard : felt) -> (res : felt):
     let (r) = wizard_stored.read(wizard)
     return (r)
+end
+
+# Store identity affinities by recursively increasing the affinityId when storing
+@external
+func store_trait_affinities_identity{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        trait : felt, length : felt, identity_len : felt, identity : felt*):
+    # store once the length of the array
+    if identity_len == 0:
+        traits_affinity_identity_len.write(trait, length)
+        return ()
+    end
+
+    traits_affinity_identity.write(trait, identity_len, identity[0])
+
+    # store next affinity in next slot
+    return store_trait_affinities_identity(
+        trait=trait, length=length, identity_len=identity_len - 1, identity=identity + 1)
+end
+
+@view
+func get_trait_affinities_identity{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(trait : felt) -> (
+        list_len : felt, list : felt*):
+    alloc_locals
+    let (local length) = traits_affinity_identity_len.read(trait)
+    let (local affinities) = alloc()
+
+    # recursively read affinities into list
+    read_trait_affinities_identity_rec(trait, length, affinities)
+
+    return (length, affinities)
+end
+
+@external
+func store_trait_affinities_positive{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        trait : felt, length : felt, positive_len : felt, positive : felt*):
+    # store once the length of the array
+    if positive_len == 0:
+        traits_affinity_positive_len.write(trait, length)
+        return ()
+    end
+
+    traits_affinity_positive.write(trait, positive_len, positive[0])
+
+    return store_trait_affinities_positive(
+        trait=trait, length=length, positive_len=positive_len - 1, positive=positive + 1)
+end
+
+@view
+func get_trait_affinities_positive{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(trait : felt) -> (
+        list_len : felt, list : felt*):
+    alloc_locals
+    let (local length) = traits_affinity_positive_len.read(trait)
+    let (local affinities) = alloc()
+
+    # recursively read affinities into list
+    read_trait_affinities_positive_rec(trait, length, affinities)
+
+    return (length, affinities)
+end
+
+# Internal recursive methods to read storage
+func read_trait_affinities_identity_rec{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        trait : felt, list_len : felt, list : felt*):
+    if list_len == 0:
+        return ()
+    end
+
+    let (aff) = traits_affinity_identity.read(trait, list_len)
+    [list] = aff
+
+    return read_trait_affinities_identity_rec(trait, list_len - 1, list + 1)
+end
+
+func read_trait_affinities_positive_rec{
+        syscall_ptr : felt*, pedersen_ptr : HashBuiltin*, range_check_ptr}(
+        trait : felt, list_len : felt, list : felt*):
+    if list_len == 0:
+        return ()
+    end
+
+    let (aff) = traits_affinity_positive.read(trait, list_len)
+    [list] = aff
+
+    return read_trait_affinities_positive_rec(trait, list_len - 1, list + 1)
 end
