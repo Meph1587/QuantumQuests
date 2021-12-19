@@ -8,7 +8,7 @@ from starkware.starknet.testing.starknet import Starknet
 
 # The path to the contract source code.
 CONTRACT_FILE = os.path.join(
-    os.path.dirname(__file__), "..", "contracts", "tester.cairo")
+    os.path.dirname(__file__), "..", "contracts", "storage.cairo")
 
 
 def generate_keypair():
@@ -21,7 +21,7 @@ def generate_keypair():
 
 
 @pytest.mark.asyncio
-async def test_add():
+async def test_store_traits():
     # Create a new Starknet class that simulates the StarkNet
     # system.
     starknet = await Starknet.empty()
@@ -29,47 +29,21 @@ async def test_add():
     # Deploy the contract.
     contract = await starknet.deploy(CONTRACT_FILE)
 
-    c = await contract.add(x=10, y=15).call()
+    r = await contract.has_traits_stored(777).call()
 
-    assert c.result.res == 25
+    assert r.result.res == 0
 
+    r = await contract.get_wizard_traits(777).call()
 
-@pytest.mark.asyncio
-async def test_get_balance():
-    # Create a new Starknet class that simulates the StarkNet
-    # system.
-    starknet = await Starknet.empty()
+    assert r.result == (0,0,0,0,0)
 
-    # Deploy the contract.
-    contract = await starknet.deploy(CONTRACT_FILE)
+    # Store Wizard Traits
+    await contract.store_wizard_traits(wizard=777,body=1,head=2,prop=3,rune=4,familiar=5).invoke()
 
-    (private_key, public_key) = generate_keypair()
+    r = await contract.get_wizard_traits(777).call()
 
-    c = await contract.balanceOf(owner=public_key).call()
+    assert r.result == (1,2,3,4,5)
 
-    assert c.result.res == 0
+    r = await contract.has_traits_stored(777).call()
 
-
-@pytest.mark.asyncio
-async def test_increment_balance():
-    # Create a new Starknet class that simulates the StarkNet
-    # system.
-    starknet = await Starknet.empty()
-
-    # Deploy the contract.
-    contract = await starknet.deploy(CONTRACT_FILE)
-
-    (private_key, public_key) = generate_keypair()
-
-    # Invoke increment() twice.
-    await contract.increment(owner=public_key, amount=15).invoke()
-
-    c = await contract.balanceOf(owner=public_key).call()
-
-    assert c.result.res == 15
-
-    await contract.increment(owner=public_key, amount=15).invoke()
-
-    c = await contract.balanceOf(owner=public_key).call()
-
-    assert c.result.res == 30
+    assert r.result.res == 1
